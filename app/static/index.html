@@ -1,0 +1,316 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Metasurface Mask Design — Replica</title>
+  <style>
+    :root{
+      --bg:#f3f3f3;
+      --accent:#c33;
+      --muted:#6b6b6b;
+      --pill-border:#bdbdbd;
+      --shadow: 0 2px 0 rgba(0,0,0,0.02), 0 6px 14px rgba(0,0,0,0.06);
+      --header-height:200px;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body{
+      margin:0;
+      background:var(--bg);
+      color:#111;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    /* Header area */
+    .hero {
+      position:relative;
+      min-height: var(--header-height);
+      background:
+        linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px) 0 0 / 44px 44px,
+        linear-gradient(0deg, rgba(0,0,0,0.02) 1px, transparent 1px) 0 0 / 44px 44px,
+        linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.6));
+      display:flex;
+      align-items:flex-end;
+      padding:28px 48px;
+      box-sizing:border-box;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+      overflow:visible;
+    }
+
+    .hero .left {
+      flex:1 1 auto;
+      min-width:0;
+      padding-bottom:18px;
+    }
+
+    .title {
+      font-size:44px;
+      font-weight:800;
+      margin:0;
+      line-height:1;
+      color:#111;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:60ch;
+    }
+
+    .subtitle {
+      margin-top:8px;
+      color:var(--accent);
+      font-size:20px;
+      font-weight:700;
+      letter-spacing:0.2px;
+    }
+
+    /* circular artwork top-right */
+    .hero .art {
+      width:190px;
+      height:190px;
+      border-radius:50%;
+      overflow:hidden;
+      background:linear-gradient(90deg, #ffeb3b, #1e90ff);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+      border:6px solid white;
+      margin-left:28px;
+      flex:0 0 auto;
+      transform:translateY(-22px);
+    }
+    .hero .art img {
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+
+    /* main content area with controls */
+    .controls {
+      padding:34px 48px 56px;
+      display:flex;
+      align-items:center;
+      gap:24px;
+      flex-wrap:wrap;
+    }
+
+    .pills {
+      display:flex;
+      gap:18px;
+      align-items:center;
+      flex:1 1 auto;
+      min-width:0;
+    }
+
+    .pill {
+      border-radius:12px;
+      padding:12px 26px;
+      border:2px solid var(--pill-border);
+      background:white;
+      box-shadow: var(--shadow);
+      font-weight:700;
+      cursor:pointer;
+      user-select:none;
+      transition:transform .12s ease, box-shadow .12s ease;
+    }
+
+    .pill:active { transform:translateY(1px); }
+    .pill.active {
+      border-color:#888;
+      background: #f7f7f7;
+    }
+
+    /* secondary row of bigger pill buttons */
+    .big-row{
+      display:flex;
+      gap:24px;
+      margin-top:18px;
+      flex-wrap:wrap;
+    }
+
+    .big-pill{
+      border-radius:14px;
+      padding:14px 26px;
+      border:2px solid var(--pill-border);
+      background:white;
+      font-weight:700;
+      box-shadow: var(--shadow);
+      cursor:pointer;
+    }
+
+    /* right-side meta controls (dropdown + label) */
+    .meta {
+      display:flex;
+      align-items:center;
+      gap:12px;
+      flex:0 0 auto;
+    }
+
+    .meta .label{
+      font-weight:800;
+      color:#333;
+      white-space:nowrap;
+      max-width:220px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      font-size:20px;
+      margin-right:6px;
+    }
+
+    /* Styled select that looks like a pill and includes a caret icon inside */
+    select.app-select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+
+      padding:10px 40px 10px 16px; /* space on right for caret */
+      border-radius:12px;
+      border:2px solid var(--pill-border);
+      background:white;
+      font-weight:800;
+      cursor:pointer;
+      box-shadow: var(--shadow);
+      font-size:16px;
+      min-width:160px;
+      background-image:
+        linear-gradient(45deg, transparent 50%, #444 50%),
+        linear-gradient(135deg, #444 50%, transparent 50%);
+      background-position:
+        calc(100% - 18px) center,
+        calc(100% - 12px) center;
+      background-size: 8px 8px, 8px 8px;
+      background-repeat: no-repeat;
+    }
+
+    select.app-select:focus {
+      outline: none;
+      border-color: #999;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    }
+
+    /* Read me button positioned to the far-right when wide */
+    .readme {
+      margin-left:auto;
+    }
+
+    .readme .big-pill {
+      background:#fff;
+    }
+
+    /* responsive tweaks */
+    @media (max-width:880px){
+      .title{ font-size:32px; }
+      .hero{ padding:18px; }
+      .hero .art{ width:140px; height:140px; transform:translateY(-12px); }
+      .controls{ padding:20px; gap:12px; }
+      .meta .label{ font-size:16px; }
+      select.app-select{ min-width:130px; padding-right:36px; }
+    }
+
+    /* small helper for footer-like spacing */
+    .spacer { height:2px; }
+  </style>
+</head>
+<body>
+
+  <header class="hero" role="banner" aria-label="Metasurface header">
+    <div class="left">
+      <h1 class="title" title="Metasurface Mask Design">Metasurface Mask Designer</h1>
+      <div class="subtitle">Arizona State University</div>
+    </div>
+
+    <div class="art" aria-hidden="true">
+      <img src="/assets/metamade.gif" alt="Animated metasurface pattern" />
+    </div>
+  </header>
+
+  <main>
+    <section class="controls" aria-label="Main controls">
+      <div class="pills" role="group" aria-label="Primary view toggles">
+        <button class="pill active" id="farFieldBtn">Far-Field</button>
+        <button class="pill" id="nearFieldBtn">Near-Field</button>
+
+        <div style="width:18px"></div>
+
+        <div class="meta" aria-hidden="false">
+          <div class="label">RIS Mode</div>
+          <select class="app-select" id="deviceSelect" aria-label="Select device type">
+            <option value="mmwave">mmWave RIS</option>
+            <option value="sub6">Sub-6 RIS</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="readme">
+        <button class="big-pill" id="readmeBtn">Read me</button>
+      </div>
+
+      <!-- big pill buttons row (mimic below row in screenshot) -->
+      <div style="width:100%"></div>
+      <div class="big-row" style="width:100%">
+        <button class="big-pill" id="ffRangeBtn">Far-Field Range of Beams</button>
+        <button class="big-pill" id="nfRangeBtn">Near-Field Range of Beams</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Updated redirects to relative routes (works in Docker / deployed host)
+    document.getElementById("farFieldBtn").addEventListener("click", () => {
+      window.location.href = "/dash/far_field/";
+    });
+
+    document.getElementById("nearFieldBtn").addEventListener("click", () => {
+      window.location.href = "/dash/near_field/";
+    });
+
+    document.getElementById("ffRangeBtn").addEventListener("click", () => {
+      window.location.href = "/dash/far_field_range_of_beams/";
+    });
+
+    document.getElementById("nfRangeBtn").addEventListener("click", () => {
+      window.location.href = "/dash/near_field_range_of_beams/";
+    });
+
+    (function(){
+      const farBtn = document.getElementById('farFieldBtn');
+      const nearBtn = document.getElementById('nearFieldBtn');
+      const deviceSelect = document.getElementById('deviceSelect');
+      const readmeBtn = document.getElementById('readmeBtn');
+
+      function setActive(which){
+        farBtn.classList.remove('active');
+        nearBtn.classList.remove('active');
+        if(which === 'far') farBtn.classList.add('active');
+        if(which === 'near') nearBtn.classList.add('active');
+      }
+
+      nearBtn.addEventListener('click', () => {
+        setActive('near');
+      });
+
+      deviceSelect.addEventListener('change', (e) => {
+        console.log('Device changed to', e.target.value);
+      });
+
+      readmeBtn.addEventListener("click", () => {
+        window.open("/assets/README.pdf", "_blank");
+      });
+
+      document.addEventListener('keydown', (ev) => {
+        if(ev.key === 'ArrowLeft' || ev.key === 'ArrowRight'){
+          if(farBtn.classList.contains('active')){
+            setActive('near');
+          } else {
+            setActive('far');
+          }
+        }
+      });
+
+      // Initialize defaults
+      setActive('far');
+    })();
+  </script>
+</body>
+</html>

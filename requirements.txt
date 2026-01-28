@@ -1,0 +1,6 @@
+flask
+dash
+plotly
+numpy
+gunicorn
+pillow
