@@ -3,6 +3,7 @@ import os
 from flask import Flask, send_from_directory, jsonify
 from app.dash_apps.farfield import create_farfield_dash
 from app.dash_apps.nearfield_range_beams import create_nearfield_range_beams_dash
+from app.dash_apps.nearfield import create_nearfield_dash
 
 def create_app():
     server = Flask(__name__, static_folder="static", static_url_path="/static")
@@ -19,7 +20,7 @@ def create_app():
 
     create_farfield_dash(server, url_base_pathname="/dash/far_field/")
     # create_farfield_dash(server, url_base_pathname="/dash/far_field_range_of_beams/")
-    # create_nearfield_dash(server, url_base_pathname="/dash/near_field/")
+    create_nearfield_dash(server, url_base_pathname="/dash/near_field/")
     create_nearfield_range_beams_dash(server, url_base_pathname="/dash/near_field_range_of_beams/")
 
     @server.route("/api/health")
