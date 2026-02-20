@@ -1,4 +1,5 @@
 # app/dash_apps/farfield.py
+import traceback
 from dash import Dash, html, dcc, Input, Output, State
 import dash
 import plotly.graph_objects as go

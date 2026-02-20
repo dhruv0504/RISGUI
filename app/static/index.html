@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -228,8 +227,8 @@
   <main>
     <section class="controls" aria-label="Main controls">
       <div class="pills" role="group" aria-label="Primary view toggles">
-        <button class="pill active" id="farFieldBtn">Far-Field</button>
-        <button class="pill" id="nearFieldBtn">Near-Field</button>
+        <button class="pill active" id="farFieldBtn" aria-pressed="true">Far-Field</button>
+        <button class="pill" id="nearFieldBtn" aria-pressed="false">Near-Field</button>
 
         <div style="width:18px"></div>
 
@@ -237,7 +236,7 @@
           <div class="label">RIS Mode</div>
           <select class="app-select" id="deviceSelect" aria-label="Select device type">
             <option value="mmwave">mmWave RIS</option>
-            <option value="sub6">Sub-6 RIS</option>
+            <option value="sub6" selected>Sub-6 RIS</option>
           </select>
         </div>
       </div>
@@ -256,48 +255,95 @@
   </main>
 
   <script>
-    // Updated redirects to relative routes (works in Docker / deployed host)
-    document.getElementById("farFieldBtn").addEventListener("click", () => {
-      window.location.href = "/dash/far_field/";
-    });
-
-    document.getElementById("nearFieldBtn").addEventListener("click", () => {
-      window.location.href = "/dash/near_field/";
-    });
-
-    document.getElementById("ffRangeBtn").addEventListener("click", () => {
-      window.location.href = "/dash/far_field_range_of_beams/";
-    });
-
-    document.getElementById("nfRangeBtn").addEventListener("click", () => {
-      window.location.href = "/dash/near_field_range_of_beams/";
-    });
-
     (function(){
       const farBtn = document.getElementById('farFieldBtn');
       const nearBtn = document.getElementById('nearFieldBtn');
       const deviceSelect = document.getElementById('deviceSelect');
       const readmeBtn = document.getElementById('readmeBtn');
 
+      const ffRangeBtn = document.getElementById('ffRangeBtn');
+      const nfRangeBtn = document.getElementById('nfRangeBtn');
+
+      // Helper to set active visual state between far/near
       function setActive(which){
         farBtn.classList.remove('active');
         nearBtn.classList.remove('active');
-        if(which === 'far') farBtn.classList.add('active');
-        if(which === 'near') nearBtn.classList.add('active');
+        farBtn.setAttribute('aria-pressed', 'false');
+        nearBtn.setAttribute('aria-pressed', 'false');
+
+        if(which === 'far'){
+          farBtn.classList.add('active');
+          farBtn.setAttribute('aria-pressed', 'true');
+        }
+        if(which === 'near'){
+          nearBtn.classList.add('active');
+          nearBtn.setAttribute('aria-pressed', 'true');
+        }
       }
 
-      nearBtn.addEventListener('click', () => {
-        setActive('near');
+      // --- Navigation mapping:
+      // We map logical actions (far_field, near_field, ff_range, nf_range)
+      // to real Dash app paths for 'sub6' and 'mmwave' modes.
+      // Edit these paths if your Dash endpoints use different URLs.
+      function routeFor(base, modeOverride) {
+        const mode = modeOverride || deviceSelect.value || 'sub6';
+
+        const map = {
+          far_field: {
+            sub6: '/dash/far_field_sub6/',
+            mmwave: '/dash/far_field/'
+          },
+          near_field: {
+            sub6: '/dash/near_field_sub6/',
+            mmwave: '/dash/near_field/'
+          },
+          ff_range: {
+            sub6: '/dash/far_field_range_of_beams_sub6/',
+            mmwave: '/dash/far_field_range_of_beams/'
+          },
+          nf_range: {
+            sub6: '/dash/near_field_range_of_beams_sub6/',
+            mmwave: '/dash/near_field_range_of_beams/'
+          }
+        };
+
+        if (map[base] && map[base][mode]) {
+          return map[base][mode];
+        } else {
+          return '/';
+        }
+      }
+
+      // Navigation handlers (use routeFor with logical keys)
+      farBtn.addEventListener("click", () => {
+        setActive('far');
+        window.location.href = routeFor('far_field');
       });
 
+      nearBtn.addEventListener("click", () => {
+        setActive('near');
+        window.location.href = routeFor('near_field');
+      });
+
+      ffRangeBtn.addEventListener("click", () => {
+        window.location.href = routeFor('ff_range');
+      });
+
+      nfRangeBtn.addEventListener("click", () => {
+        window.location.href = routeFor('nf_range');
+      });
+
+      // Keep deviceSelect changes visible in console and (optionally) update the page title/label
       deviceSelect.addEventListener('change', (e) => {
         console.log('Device changed to', e.target.value);
       });
 
+      // Readme opens same readme file
       readmeBtn.addEventListener("click", () => {
         window.open("/assets/README.pdf", "_blank");
       });
 
+      // Arrow key toggles between modes (left/right) but preserve active state.
       document.addEventListener('keydown', (ev) => {
         if(ev.key === 'ArrowLeft' || ev.key === 'ArrowRight'){
           if(farBtn.classList.contains('active')){

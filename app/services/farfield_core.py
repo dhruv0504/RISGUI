@@ -6,6 +6,7 @@ import sys
 import traceback
 import numpy as np
 import plotly.graph_objects as go
+from PIL import Image
 
 # Small helpers
 def wrap_to_pi(x):
@@ -152,35 +153,391 @@ def compute_fields(theta_inc_deg, phi_inc_deg,
 
 # Plot builders (moved & lightly adapted)
 
-def build_vector_figure_visible(data, texture_rgb=None):
-    iv = data["incident_vector"]
-    rv = data["reflected_vector"]
+# 
 
+def build_vector_figure_visible(data, texture_rgb=None):
+    """
+    3D radiation-surface visualization:
+      - constructs a parametric spherical surface where radius(θ,φ) ∝ 10^(dB/20)
+      - maps clipped dB values (r_clip) to vertex intensity/color
+      - overlays RIS plane grid and incident/reflected arrows (from data)
+    """
+
+
+    # extract vectors + grid size
+    iv = np.array(data["incident_vector"], dtype=float)
+    rv = np.array(data["reflected_vector"], dtype=float)
+
+    try:
+        # dB grid (phi x theta) as produced by compute_fields
+        r_clip = np.array(data["r_clip"])   # shape (len(phi), len(theta))
+        theta_deg = np.array(data["theta"]) # -90..90
+        phi_deg = np.array(data["phi"])     # 0..360
+
+        # convert to radians and build param mesh (phi major, theta minor -> same ordering used earlier)
+        theta_rad = np.deg2rad(theta_deg)   # shape (len(theta),)
+        phi_rad = np.deg2rad(phi_deg)       # shape (len(phi),)
+        PH, TH = np.meshgrid(phi_rad, theta_rad, indexing='ij')  # shape (len(phi), len(theta))
+
+        # convert TH (colatitude) from -pi/2..pi/2 to co-latitude 0..pi for spherical mapping:
+        # TH is polar angle from XY plane; co_lat = pi/2 - TH
+        co_lat = (np.pi / 2.0) - TH
+
+        # convert dB to linear amplitude; small eps to avoid zero
+        amp = 10.0 ** (r_clip / 20.0)
+        amp = np.nan_to_num(amp, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # normalize amplitude to [0,1] for visual scaling
+        a_min = amp.min() if amp.size else 0.0
+        a_max = amp.max() if amp.size else 1.0
+        if a_max - a_min < 1e-12:
+            amp_norm = np.zeros_like(amp)
+        else:
+            amp_norm = (amp - a_min) / (a_max - a_min)
+
+        # scale radius: base offset so small sidelobes still visible
+        base_radius = 0.2
+        scale_radius = 1.1    # overall scale factor for display
+        R = base_radius + (amp_norm * scale_radius)
+
+        # spherical -> cartesian coordinates
+        Xs = (R * np.sin(co_lat) * np.cos(PH))
+        Ys = (R * np.sin(co_lat) * np.sin(PH))
+        Zs = (R * np.cos(co_lat))
+
+        # flatten for mesh building
+        rows, cols = Xs.shape   # rows=len(phi), cols=len(theta)
+        verts_x = Xs.ravel()
+        verts_y = Ys.ravel()
+        verts_z = Zs.ravel()
+        intensity = amp.ravel()   # color mapping by linear amplitude (or could use r_clip.ravel())
+
+        # build triangle faces (two triangles per quad)
+        I = []; J = []; K = []
+        def idx(i, j): return i * cols + j
+        for i in range(rows - 1):
+            for j in range(cols - 1):
+                a = idx(i, j)
+                b = idx(i + 1, j)
+                c = idx(i + 1, j + 1)
+                d = idx(i, j + 1)
+                # triangle a-b-c
+                I.append(a); J.append(b); K.append(c)
+                # triangle a-c-d
+                I.append(a); J.append(c); K.append(d)
+
+        # Build figure
+        fig = go.Figure()
+
+        # radiation mesh
+        fig.add_trace(go.Mesh3d(
+            x=verts_x, y=verts_y, z=verts_z,
+            i=I, j=J, k=K,
+            intensity=intensity,
+            colorscale='Viridis',
+            showscale=True,
+            colorbar=dict(title="Linear amplitude"),
+            opacity=0.95,
+            flatshading=False,
+            name="Radiation surface",
+            hoverinfo='skip'
+        ))
+
+        # add a translucent RIS plane grid at x=0 for context (small plane)
+        plane_half = 1.15
+        ny = max(data["X"].shape[0], 8)
+        nx = max(data["X"].shape[1], 8)
+        y_vals = np.linspace(-plane_half, plane_half, ny)
+        z_vals = np.linspace(-plane_half, plane_half, nx)
+        for yv in y_vals:
+            fig.add_trace(go.Scatter3d(
+                x=[0.0, 0.0], y=[yv, yv], z=[z_vals[0], z_vals[-1]],
+                mode='lines', line=dict(color='saddlebrown', width=2), showlegend=False, hoverinfo='skip'
+            ))
+        for zv in z_vals:
+            fig.add_trace(go.Scatter3d(
+                x=[0.0, 0.0], y=[y_vals[0], y_vals[-1]], z=[zv, zv],
+                mode='lines', line=dict(color='saddlebrown', width=2), showlegend=False, hoverinfo='skip'
+            ))
+
+        # arrow drawing helper (same style as original)
+        def add_arrow_line(fig, start, vec, color, name=None):
+            start = np.array(start, dtype=float)
+            vec = np.array(vec, dtype=float)
+            norm = np.linalg.norm(vec)
+            if norm < 1e-9:
+                vec = np.array([0.,0.,1.])
+                norm = 1.0
+            dir_u = vec / norm
+            vis_len = 1.0
+            tip = start + dir_u * vis_len
+            line_end = start + dir_u * (vis_len * 0.86)
+            fig.add_trace(go.Scatter3d(
+                x=[start[0], line_end[0]],
+                y=[start[1], line_end[1]],
+                z=[start[2], line_end[2]],
+                mode='lines', line=dict(color=color, width=6), name=name, hoverinfo='skip'
+            ))
+            fig.add_trace(go.Scatter3d(
+                x=[tip[0]], y=[tip[1]], z=[tip[2]],
+                mode='markers',
+                marker=dict(size=8, color=color, symbol='diamond'),
+                showlegend=False, hoverinfo='skip'
+            ))
+
+        # place incident arrow coming from +X side (so visible)
+        add_arrow_line(fig, [1.5, 0.0, 0.0], -iv, 'red', name='Incident Vector')
+        add_arrow_line(fig, [0.0, 0.0, 0.0], rv, 'blue', name='Reflected Vector')
+
+        # Add a central origin marker
+        fig.add_trace(go.Scatter3d(x=[0.0], y=[0.0], z=[0.0], mode='markers',
+                                   marker=dict(size=4, color='black'), showlegend=False, hoverinfo='skip'))
+
+        fig.update_layout(
+            title="3D Radiation Surface (mapped from r_clip)",
+            scene=dict(
+                xaxis=dict(title='X', backgroundcolor='rgb(245,245,245)', gridcolor='lightgray', zeroline=False),
+                yaxis=dict(title='Y', backgroundcolor='rgb(245,245,245)', gridcolor='lightgray', zeroline=False),
+                zaxis=dict(title='Z', backgroundcolor='rgb(245,245,245)', gridcolor='lightgray', zeroline=False),
+                aspectmode='auto',
+                camera=dict(eye=dict(x=1.4, y=-1.6, z=0.9))
+            ),
+            margin=dict(l=10, r=10, t=40, b=10),
+            paper_bgcolor='white',
+            plot_bgcolor='white',
+            showlegend=True
+        )
+
+        return fig
+
+    except Exception as e:
+        # fallback to a simple scene if something fails
+        print("build_vector_figure_visible error:", e)
+        fallback = go.Figure()
+        fallback.update_layout(scene=dict(aspectmode='cube'))
+        return fallback
+
+
+# def build_vector_figure_visible(data, texture_rgb=None):
+    """
+    Replacement that renders:
+      - textured rectangular panel (from /mnt/data/ff74ec77-1323-4910-818f-cf2fb6151f68.png)
+      - several glossy parametric lobes (Mesh3d) to mimic the decorative pattern
+      - original grid lines and incident/reflected arrows
+
+    Note: This is a stylized approximation — Plotly doesn't support full photorealistic
+    texture-mapped materials (no true UV-mapping / PBR), so the result is an artistic
+    3D composition that keeps the domain meaning (panel + vectors).
+    """
+
+
+    iv = np.array(data["incident_vector"], dtype=float)
+    rv = np.array(data["reflected_vector"], dtype=float)
+
+    # scene / plane sizing
     plane_half = 1.3
     ny, nx = data["X"].shape
     ny = max(ny, 8); nx = max(nx, 8)
-    y_vals = np.linspace(-plane_half, plane_half, ny)
-    z_vals = np.linspace(-plane_half, plane_half, nx)
-    Yp, Zp = np.meshgrid(y_vals, z_vals)
-    Xp = np.zeros_like(Yp)
+
+    # Make the textured panel (vertical rectangle) positioned near x ~ 0.6
+    panel_center_x = 0.6
+    panel_w = 1.6   # panel width (y span)
+    panel_h = 1.6   # panel height (z span)
+    py = np.linspace(-panel_w/2, panel_w/2, nx)
+    pz = np.linspace(-panel_h/2, panel_h/2, ny)
+    PY, PZ = np.meshgrid(py, pz)   # shape (ny, nx)
+    PX = np.ones_like(PY) * panel_center_x
 
     fig = go.Figure()
-    fig.add_trace(go.Surface(
-        x=Xp, y=Yp, z=Zp,
-        surfacecolor=np.ones_like(Xp),
-        showscale=False, opacity=0.78,
-        colorscale=[[0,'rgb(210,190,170)'], [1,'rgb(210,190,170)']],
-        hoverinfo='skip', name='RIS plane'
+
+    # Try to texture the panel using the provided PNG path
+    img_path = "/mnt/data/ff74ec77-1323-4910-818f-cf2fb6151f68.png"
+    try:
+        if os.path.exists(img_path):
+            img = Image.open(img_path).convert("RGBA")
+            # Resize to mesh dimensions (nx x ny)
+            img_resized = img.resize((nx, ny), Image.LANCZOS)
+            rgba = np.array(img_resized)  # (ny, nx, 4)
+            rgb = rgba[..., :3]
+            # Flatten to build colorscale (one color per pixel)
+            flat_rgb = rgb.reshape(-1, 3)
+            ncolors = flat_rgb.shape[0]
+            colorscale = []
+            for i, (r, g, b) in enumerate(flat_rgb):
+                pos = i / max(ncolors - 1, 1)
+                colorscale.append((pos, f"rgb({int(r)},{int(g)},{int(b)})"))
+            # Build surfacecolor normalized 0..1
+            idxs = np.arange(ncolors).reshape((ny, nx))
+            surfacecolor = idxs.astype(np.float32) / max(ncolors - 1, 1)
+            # Optionally flip to match orientation visually
+            surfacecolor = np.flipud(surfacecolor)
+
+            fig.add_trace(go.Surface(
+                x=PX, y=PY, z=PZ,
+                surfacecolor=surfacecolor,
+                colorscale=colorscale,
+                cmin=0.0, cmax=1.0,
+                showscale=False, opacity=0.98,
+                name='Decorative panel',
+                hoverinfo='skip'
+            ))
+        else:
+            # If image missing, fallback to a warm panel color
+            raise FileNotFoundError("Texture image missing")
+    except Exception as e:
+        # Fallback plain panel
+        print("Texture panel error:", e); sys.stdout.flush()
+        fig.add_trace(go.Surface(
+            x=PX, y=PY, z=PZ,
+            surfacecolor=np.ones_like(PX),
+            showscale=False, opacity=0.94,
+            colorscale=[[0,'rgb(250,235,200)'], [1,'rgb(220,180,120)']],
+            hoverinfo='skip', name='Panel'
+        ))
+
+    # Function to generate a glossy lobe / petal mesh (parametric)
+    def make_lobe(center, direction, scale=1.0, petals=6, smooth=48, length=1.0, thickness=0.8):
+        """
+        Create a petal/lobe-like mesh around 'direction' vector.
+        - center: 3-vector offset for the lobe
+        - direction: unit 3-vector pointing toward main axis of lobe
+        """
+        # Ensure direction unit
+        d = np.array(direction, dtype=float)
+        dnorm = np.linalg.norm(d)
+        if dnorm < 1e-8:
+            d = np.array([0.0, 0.0, 1.0])
+        else:
+            d = d / dnorm
+
+        # Build orthonormal basis (u,v,w) with w=d
+        # pick arbitrary vector not parallel to d
+        a = np.array([1.0, 0.1, 0.2])
+        if abs(np.dot(a, d)) > 0.9:
+            a = np.array([0.0, 1.0, 0.0])
+        u = np.cross(d, a)
+        u /= np.linalg.norm(u)
+        v = np.cross(d, u)
+
+        # param space
+        theta = np.linspace(0, 2*np.pi, smooth)
+        phi = np.linspace(0, np.pi, smooth//2)
+        th, ph = np.meshgrid(theta, phi)
+
+        # radial variation to get petals: r = 1 + 0.4*cos(petals*theta) * sin(phi)^power
+        pet = 0.55 * np.cos(petals * th) * (np.sin(ph) ** 2.2)
+        r = 0.8 + pet
+        # shape in spherical coords: radius scaled by an envelope so it tapers
+        radius = (length * (np.sin(ph) ** 1.2) * r) * scale
+
+        # spherical to cartesian in local basis (w points outward)
+        Xc = (radius * np.sin(ph) * np.cos(th))[:, :]
+        Yc = (radius * np.sin(ph) * np.sin(th))[:, :]
+        Zc = (radius * np.cos(ph))[:, :]
+
+        # Compose points into world coords P = center + u*Xc + v*Yc + d*Zc
+        pts = center[None, None, :] + (u[None, None, :] * Xc[..., None] +
+                                       v[None, None, :] * Yc[..., None] +
+                                       d[None, None, :] * Zc[..., None])
+        # Flatten grid into triangles for Mesh3d
+        rows, cols, _ = pts.shape
+        verts = pts.reshape((-1, 3))
+        # build faces (i,j,k) using grid indices
+        def idx(i, j): return i * cols + j
+        I = []
+        J = []
+        K = []
+        for i in range(rows - 1):
+            for j in range(cols - 1):
+                a_idx = idx(i, j)
+                b_idx = idx(i + 1, j)
+                c_idx = idx(i + 1, j + 1)
+                d_idx = idx(i, j + 1)
+                # two triangles: a-b-c and a-c-d
+                I += [a_idx, a_idx]
+                J += [b_idx, c_idx]
+                K += [c_idx, d_idx]
+        # color per vertex (gloss effect): use simple gradient based on Zc (height)
+        z_vals = verts[:, 2]
+        zmin, zmax = z_vals.min(), z_vals.max()
+        if zmax - zmin < 1e-6:
+            z_norm = np.zeros_like(z_vals)
+        else:
+            z_norm = (z_vals - zmin) / (zmax - zmin)
+        # map to rgb-like (bluish to cyan to white)
+        colors = ["rgb({},{},{})".format(
+            int(20 + 200*z), int(140 + 100*z), int(200 + 55*z)
+        ) for z in z_norm]
+        return verts[:, 0], verts[:, 1], verts[:, 2], I, J, K, colors
+
+    # Create a few lobes:
+    # Largest lobe pointing along 'rv' (reflected vector) and placed slightly behind the panel
+    verts_x, verts_y, verts_z, I, J, K, colors = make_lobe(
+        center=np.array([-0.1, 0.0, 0.0]), direction=rv,
+        scale=1.0, petals=5, smooth=64, length=1.05
+    )
+    fig.add_trace(go.Mesh3d(
+        x=verts_x, y=verts_y, z=verts_z,
+        i=I, j=J, k=K,
+        facecolor=colors,
+        flatshading=False,
+        name="Lobe (reflected)",
+        opacity=0.95,
+        hoverinfo='skip',
+        showscale=False
     ))
 
-    # grid lines
+    # Secondary lobe pointing roughly opposite (incident)
+    verts_x2, verts_y2, verts_z2, I2, J2, K2, colors2 = make_lobe(
+        center=np.array([0.6, -0.2, 0.0]), direction=-iv,
+        scale=0.7, petals=4, smooth=48, length=0.85
+    )
+    fig.add_trace(go.Mesh3d(
+        x=verts_x2, y=verts_y2, z=verts_z2,
+        i=I2, j=J2, k=K2,
+        facecolor=colors2,
+        flatshading=False,
+        name="Lobe (incident)",
+        opacity=0.92,
+        hoverinfo='skip',
+        showscale=False
+    ))
+
+    # Small glossy highlights (spherical blobs) around origin for visual richness
+    def add_highlight(center, r=0.12, segments=20):
+        u = np.linspace(0, 2*np.pi, segments)
+        v = np.linspace(0, np.pi, segments//2)
+        uu, vv = np.meshgrid(u, v)
+        Xs = center[0] + r * np.cos(uu) * np.sin(vv)
+        Ys = center[1] + r * np.sin(uu) * np.sin(vv)
+        Zs = center[2] + r * np.cos(vv)
+        verts = np.stack([Xs.ravel(), Ys.ravel(), Zs.ravel()], axis=1)
+        rows, cols = Xs.shape
+        I = []; J = []; K = []
+        def idx2(i,j): return i*cols + j
+        for i in range(rows-1):
+            for j in range(cols-1):
+                a=idx2(i,j); b=idx2(i+1,j); c=idx2(i+1,j+1); d=idx2(i,j+1)
+                I+= [a,a]; J+=[b,c]; K+=[c,d]
+        colors = ["rgb(240,240,255)" for _ in range(verts.shape[0])]
+        return verts[:,0], verts[:,1], verts[:,2], I, J, K, colors
+
+    hx, hy, hz, HI, HJ, HK, Hcols = add_highlight(np.array([0.0, 0.0, 0.0]), r=0.08, segments=16)
+    fig.add_trace(go.Mesh3d(x=hx, y=hy, z=hz, i=HI, j=HJ, k=HK, facecolor=Hcols, opacity=0.95, hoverinfo='skip', showscale=False))
+
+    # grid lines on the RIS plane area (for context) - reuse your y_vals/z_vals approach but oriented on x=0 plane
+    nyg = max(8, data["X"].shape[0])
+    nxg = max(8, data["X"].shape[1])
+    y_vals = np.linspace(-plane_half, plane_half, nyg)
+    z_vals = np.linspace(-plane_half, plane_half, nxg)
     for yv in y_vals:
         fig.add_trace(go.Scatter3d(x=[0,0], y=[yv,yv], z=[z_vals[0], z_vals[-1]],
-                                   mode='lines', line=dict(color='saddlebrown', width=2), showlegend=False))
+                                   mode='lines', line=dict(color='saddlebrown', width=2), showlegend=False, hoverinfo='skip'))
     for zv in z_vals:
         fig.add_trace(go.Scatter3d(x=[0,0], y=[y_vals[0], y_vals[-1]], z=[zv,zv],
-                                   mode='lines', line=dict(color='saddlebrown', width=2), showlegend=False))
+                                   mode='lines', line=dict(color='saddlebrown', width=2), showlegend=False, hoverinfo='skip'))
 
+    # Arrow helper (exactly like your original)
     def add_arrow_line(fig, start, vec, color, name=None):
         start = np.array(start, dtype=float)
         vec = np.array(vec, dtype=float)
@@ -208,16 +565,17 @@ def build_vector_figure_visible(data, texture_rgb=None):
     add_arrow_line(fig, [1.5,0,0], -iv, 'red', name='Incident Vector')
     add_arrow_line(fig, [0,0,0], rv, 'blue', name='Reflected Vector')
 
+    # Final layout styling
     fig.update_layout(
         scene=dict(
             aspectmode='manual',
-            aspectratio=dict(x=1.0, y=1.0, z=0.8),
+            aspectratio=dict(x=1.0, y=1.0, z=0.85),
             xaxis=dict(range=[-2,2], title='X', backgroundcolor='rgb(245,245,245)', gridcolor='lightgray'),
             yaxis=dict(range=[-2,2], title='Y', backgroundcolor='rgb(245,245,245)', gridcolor='lightgray'),
             zaxis=dict(range=[-2,2], title='Z', backgroundcolor='rgb(245,245,245)', gridcolor='lightgray'),
-            camera=dict(eye=dict(x=1.3, y=-1.4, z=0.8))
+            camera=dict(eye=dict(x=1.3, y=-1.4, z=0.9))
         ),
-        margin=dict(l=10, r=10, t=30, b=10),
+        margin=dict(l=8, r=8, t=28, b=8),
         paper_bgcolor='white',
         plot_bgcolor='white',
         showlegend=True
