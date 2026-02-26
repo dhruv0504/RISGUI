@@ -235,8 +235,8 @@
         <div class="meta" aria-hidden="false">
           <div class="label">RIS Mode</div>
           <select class="app-select" id="deviceSelect" aria-label="Select device type">
-            <option value="mmwave">mmWave RIS</option>
-            <option value="sub6" selected>Sub-6 RIS</option>
+            <option value="mmwave" selected>mmWave RIS</option>
+            <option value="sub6">Sub-6 RIS</option>
           </select>
         </div>
       </div>
@@ -286,7 +286,7 @@
       // to real Dash app paths for 'sub6' and 'mmwave' modes.
       // Edit these paths if your Dash endpoints use different URLs.
       function routeFor(base, modeOverride) {
-        const mode = modeOverride || deviceSelect.value || 'sub6';
+        const mode = modeOverride || deviceSelect.value || 'mmwave';
 
         const map = {
           far_field: {

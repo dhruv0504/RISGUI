@@ -4,6 +4,18 @@ import math
 import plotly.graph_objects as go
 import os
 from datetime import datetime
+import pickle, functools
+
+def _cache_by_params(func, maxsize=64):
+    cache = functools.lru_cache(maxsize=maxsize)(lambda key: func(pickle.loads(key)))
+    def wrapper(params):
+        try:
+            key = pickle.dumps(params, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception:
+            key = pickle.dumps(str(params), protocol=pickle.HIGHEST_PROTOCOL)
+        return cache(key)
+    wrapper.cache_clear = cache.cache_clear
+    return wrapper
 
 def _wrap_to_pi(x):
     x = np.array(x)
@@ -280,3 +292,7 @@ def compute_farfield_codebook(params):
     }
     bits_flat = formatted_codewords[0].flatten().tolist() if formatted_codewords else np.zeros((36*56,), dtype=int).tolist()
     return {"figure": fig, "meta": meta, "codebook": bits_flat}
+
+
+# Wrap with a pickle-backed cache for dict-params
+compute_farfield_codebook = _cache_by_params(compute_farfield_codebook, maxsize=64)

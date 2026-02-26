@@ -254,3 +254,21 @@ def compute_nearfield_pattern(params: dict):
     stored = codebook_bits.astype(int).tolist()
     # return 'z' key to satisfy callers/tests that expect a z-grid/result
     return {"figure": fig, "codebook": stored, "status": status, "z": rr_disp}
+
+
+# Add a small pickle-backed cache wrapper for dict-params functions
+import pickle, functools
+
+def _cache_by_params(func, maxsize=128):
+    cache = functools.lru_cache(maxsize=maxsize)(lambda key: func(pickle.loads(key)))
+    def wrapper(params):
+        try:
+            key = pickle.dumps(params, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception:
+            key = pickle.dumps(str(params), protocol=pickle.HIGHEST_PROTOCOL)
+        return cache(key)
+    wrapper.cache_clear = cache.cache_clear
+    return wrapper
+
+# Wrap compute_nearfield_pattern with caching
+compute_nearfield_pattern = _cache_by_params(compute_nearfield_pattern, maxsize=128)

@@ -8,6 +8,7 @@ import numpy as np
 import plotly.graph_objects as go
 from PIL import Image
 import functools
+from functools import lru_cache
 
 # Small helpers
 def wrap_to_pi(x):
@@ -173,6 +174,11 @@ def compute_fields(theta_inc_deg, phi_inc_deg,
         print("compute_fields error:", e)
         print(tb)
         return {"error": str(e), "trace": tb}
+
+
+# Cache the far-field compute for repeated identical numeric calls
+# Note: arguments must be hashable (numbers/bools). Cache size tuned modestly.
+compute_fields = lru_cache(maxsize=64)(compute_fields)
 
 # Plot builders (moved & lightly adapted)
 
