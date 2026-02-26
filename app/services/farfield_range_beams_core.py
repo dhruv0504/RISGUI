@@ -11,6 +11,7 @@ Replace compute_farfield_fast() internals with the full MATLAB -> Python port wh
 import io
 import numpy as np
 import plotly.graph_objects as go
+from functools import lru_cache
 
 # Fixed RIS size (kept like the MATLAB UI)
 ANT_X = 32
@@ -126,6 +127,10 @@ def compute_farfield_fast(
     codebook_bits = np.stack(masks_bits, axis=0).astype(int)  # (Nmask,RS1,RS2)
     status = f"Generated {codebook_bits.shape[0]} synthetic mask(s)."
     return {"figure": fig, "codebook": codebook_bits, "status": status}
+
+
+# Cache the synthetic far-field engine (numeric args are hashable)
+compute_farfield_fast = lru_cache(maxsize=128)(compute_farfield_fast)
 
 # === Public API used by Dash wrapper ===
 def compute_farfield_pattern(params: dict):

@@ -9,6 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 from PIL import Image
 import os
+from functools import lru_cache
 
 # constants / default random sample (from your provided vector)
 phi_ele_rand_sample = np.array([
@@ -214,6 +215,10 @@ def compute_nearfield(xi, yi, zi, xr, yr, zr, zcut,
         print("compute_nearfield error:", e)
         print(tb)
         return {"error": str(e), "trace": tb}
+    
+
+# Cache near-field compute to speed repeated identical queries from the UI
+compute_nearfield = lru_cache(maxsize=64)(compute_nearfield)
         
 
 # ---------- plotting helpers ----------
