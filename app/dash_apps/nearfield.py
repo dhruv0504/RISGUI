@@ -3,6 +3,8 @@ from dash import Dash, html, dcc, Input, Output, State
 import dash
 import plotly.graph_objects as go
 import traceback
+from app.dash_apps.callback_helpers import empty_figure
+from app.dash_apps.ui_helpers import dr_control, randomization_control
 
 from app.services.nearfield_core import (
     compute_nearfield,
@@ -59,12 +61,13 @@ def create_nearfield_dash(server, url_base_pathname="/dash/near_field/"):
         init_xy = build_xy_figure(data0); init_xy = _enforce_square_2d(init_xy, size_px=480)
         init_yz = build_yz_figure(data0); init_yz = _enforce_square_2d(init_yz, size_px=480)
     except Exception:
-        init_vec = go.Figure(); init_vec.update_layout(scene=dict(aspectmode='cube'))
+        init_vec = empty_figure()
+        init_vec.update_layout(scene=dict(aspectmode='cube'))
         init_vec = _enforce_square_3d(init_vec, size_px=480)
-        init_phase = go.Figure(); init_phase = _enforce_square_2d(init_phase, size_px=480)
-        init_illum = go.Figure(); init_illum = _enforce_square_2d(init_illum, size_px=480)
-        init_xy = go.Figure(); init_xy = _enforce_square_2d(init_xy, size_px=480)
-        init_yz = go.Figure(); init_yz = _enforce_square_2d(init_yz, size_px=480)
+        init_phase = _enforce_square_2d(empty_figure(), size_px=480)
+        init_illum = _enforce_square_2d(empty_figure(), size_px=480)
+        init_xy = _enforce_square_2d(empty_figure(), size_px=480)
+        init_yz = _enforce_square_2d(empty_figure(), size_px=480)
 
     dash_app.layout = html.Div([
         html.H3("Near-field / Reflectarray Visualizer (Dash)"),
@@ -84,9 +87,9 @@ def create_nearfield_dash(server, url_base_pathname="/dash/near_field/"):
                 html.Br(),html.Br(),
                 html.Label("Z-cut (for plotting)"), dcc.Input(id='zcut', type='number', value=0),
                 html.Br(),html.Br(),
-                html.Label("Randomization"), dcc.RadioItems(id='rand', options=[{'label':'Off','value':'Off'},{'label':'On','value':'On'}], value='On'),
+                randomization_control('rand', default='On'),
                 html.Br(),html.Br(),
-                html.Label("Dynamic Range"), dcc.Input(id='dr1', type='number', value=-20), html.Span(" to "), dcc.Input(id='dr2', type='number', value=0),
+                dr_control('dr1', 'dr2', dr_min_default=-20, dr_max_default=0),
                 html.Br(), html.Br(),
                 html.Div([
                     html.Label("θi (deg)"), dcc.Input(id='theta_i', type='number', readOnly=True),
@@ -189,8 +192,7 @@ html.Div([
             tb = traceback.format_exc()
             print("dash nearfield update error:", e)
             print(tb)
-            placeholder = go.Figure()
-            placeholder = _enforce_square_2d(placeholder, size_px=480)
+            placeholder = _enforce_square_2d(empty_figure(), size_px=480)
             return placeholder, placeholder, placeholder, placeholder, placeholder, f"Error: {str(e)}", dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
     return dash_app

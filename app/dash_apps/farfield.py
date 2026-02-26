@@ -3,6 +3,8 @@ import traceback
 from dash import Dash, html, dcc, Input, Output, State
 import dash
 import plotly.graph_objects as go
+from app.dash_apps.callback_helpers import register_sync_pair, empty_figure
+from app.dash_apps.ui_helpers import dr_control, randomization_control
 from app.services.farfield_core import (
     compute_fields,
     build_vector_figure_visible,
@@ -52,13 +54,8 @@ def create_farfield_dash(server, url_base_pathname="/dash/far_field/"):
                 dcc.Input(id='phi-ref-input', type='number', min=0, max=180, step=1, value=150),
                 html.Br(),
                 html.P(f"RIS size: {STATIC_RS1} × {STATIC_RS2} elements (fixed)", style={'fontWeight':'bold'}),
-                html.Label("FROM(dB)"), dcc.Input(id='dr1', type='number', value=-30, step=1),
-                html.Br(),
-                html.Br(),
-                html.Label("TO(dB)"), dcc.Input(id='dr2', type='number', value=0, step=1),
-                html.Br(),
-                html.Label("Randomization"),
-                dcc.RadioItems(id='rand', options=[{'label':'On','value':'On'},{'label':'Off','value':'Off'}], value='On', inline=True),
+                dr_control('dr1', 'dr2', dr_min_default=-30, dr_max_default=0),
+                randomization_control('rand', default='On'),
                 html.Br(),
                 dcc.Upload(id='upload-image', children=html.Button('Upload grid.png (optional)')),
                 html.Br(),
@@ -75,75 +72,11 @@ def create_farfield_dash(server, url_base_pathname="/dash/far_field/"):
         ])
     ], style={'fontFamily':'Arial, sans-serif'})
 
-    # sync callbacks for sliders & inputs (same patterns as your script)
-    @dash_app.callback(
-        Output('theta-inc-slider', 'value'),
-        Output('theta-inc-input', 'value'),
-        Input('theta-inc-slider', 'value'),
-        Input('theta-inc-input', 'value'),
-    )
-    def sync_theta_inc(slider_val, input_val):
-        triggered_id = dash.callback_context.triggered_id
-        if triggered_id == 'theta-inc-slider':
-            return slider_val, slider_val
-        if triggered_id == 'theta-inc-input':
-            if input_val is None:
-                return dash.no_update, dash.no_update
-            v = int(input_val)
-            v = max(0, min(90, v))
-            return v, v
-        return dash.no_update, dash.no_update
-
-    @dash_app.callback(
-        Output('phi-inc-slider', 'value'),
-        Output('phi-inc-input', 'value'),
-        Input('phi-inc-slider', 'value'),
-        Input('phi-inc-input', 'value'),
-    )
-    def sync_phi_inc(slider_val, input_val):
-        triggered_id = dash.callback_context.triggered_id
-        if triggered_id == 'phi-inc-slider':
-            return slider_val, slider_val
-        if triggered_id == 'phi-inc-input':
-            if input_val is None:
-                return dash.no_update, dash.no_update
-            v = int(input_val); v = max(0, min(180, v))
-            return v, v
-        return dash.no_update, dash.no_update
-
-    @dash_app.callback(
-        Output('theta-ref-slider', 'value'),
-        Output('theta-ref-input', 'value'),
-        Input('theta-ref-slider', 'value'),
-        Input('theta-ref-input', 'value'),
-    )
-    def sync_theta_ref(slider_val, input_val):
-        triggered_id = dash.callback_context.triggered_id
-        if triggered_id == 'theta-ref-slider':
-            return slider_val, slider_val
-        if triggered_id == 'theta-ref-input':
-            if input_val is None:
-                return dash.no_update, dash.no_update
-            v = int(input_val); v = max(0, min(90, v))
-            return v, v
-        return dash.no_update, dash.no_update
-
-    @dash_app.callback(
-        Output('phi-ref-slider', 'value'),
-        Output('phi-ref-input', 'value'),
-        Input('phi-ref-slider', 'value'),
-        Input('phi-ref-input', 'value'),
-    )
-    def sync_phi_ref(slider_val, input_val):
-        triggered_id = dash.callback_context.triggered_id
-        if triggered_id == 'phi-ref-slider':
-            return slider_val, slider_val
-        if triggered_id == 'phi-ref-input':
-            if input_val is None:
-                return dash.no_update, dash.no_update
-            v = int(input_val); v = max(0, min(180, v))
-            return v, v
-        return dash.no_update, dash.no_update
+    # register sync callbacks using helper to avoid repetition
+    register_sync_pair(dash_app, 'theta-inc-slider', 'theta-inc-input', 0, 90, int)
+    register_sync_pair(dash_app, 'phi-inc-slider', 'phi-inc-input', 0, 180, int)
+    register_sync_pair(dash_app, 'theta-ref-slider', 'theta-ref-input', 0, 90, int)
+    register_sync_pair(dash_app, 'phi-ref-slider', 'phi-ref-input', 0, 180, int)
 
     # Run callback
     @dash_app.callback(
@@ -181,7 +114,8 @@ def create_farfield_dash(server, url_base_pathname="/dash/far_field/"):
 
         except Exception as err:
             print("Run callback error:", err); traceback.print_exc()
-            placeholder = go.Figure(); placeholder.update_layout(scene=dict(aspectmode='cube'))
+            placeholder = empty_figure()
+            placeholder.update_layout(scene=dict(aspectmode='cube'))
             return placeholder, placeholder, placeholder, f"Error: {str(err)}"
 
     return dash_app

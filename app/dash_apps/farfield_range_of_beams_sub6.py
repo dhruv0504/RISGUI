@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import os, traceback, time
 
 from app.services.farfieldrangeofbeamssub6_core import compute_farfield_codebook
+from app.dash_apps.callback_helpers import empty_figure
 
 def create_farfield_range_of_beams_sub6_dash(server=None, url_base_pathname="/dash/far_field_range_of_beams_sub6/"):
     dash_app = Dash(__name__, server=server, external_stylesheets=[dbc.themes.BOOTSTRAP],
@@ -152,11 +153,10 @@ def create_farfield_range_of_beams_sub6_dash(server=None, url_base_pathname="/da
                 Z = -40 * np.ones_like(Uu)
                 inside = R <= 1.0
                 Z[inside] = -10 + 8.0 * np.exp(-8.0 * (Uu[inside]**2 + Vv[inside]**2))
-                fig_fallback = go.Figure()
+                fig_fallback = empty_figure(title="Beam pattern (fallback)")
                 fig_fallback.add_trace(go.Heatmap(z=Z, x=uu, y=vv, zmin=DR1, zmax=DR2, colorscale='Viridis',
                                                   colorbar=dict(title="Magnitude dB")))
-                fig_fallback.update_layout(title="Beam pattern (fallback)", xaxis=dict(range=[-1,1]),
-                                           yaxis=dict(range=[-1,1], scaleanchor="x", scaleratio=1))
+                fig_fallback.update_layout(xaxis=dict(range=[-1,1]), yaxis=dict(range=[-1,1], scaleanchor="x", scaleratio=1))
                 meta_text = f"(fallback) core returned empty — took {elapsed:.1f}s"
                 print("Returning fallback figure")
                 return fig_fallback, meta_text
@@ -176,11 +176,10 @@ def create_farfield_range_of_beams_sub6_dash(server=None, url_base_pathname="/da
             Z = -40 * np.ones_like(Uu)
             inside = R <= 1.0
             Z[inside] = -10 + 8.0 * np.exp(-8.0 * (Uu[inside]**2 + Vv[inside]**2))
-            fig_err = go.Figure()
+            fig_err = empty_figure(title="Beam pattern (error fallback)")
             fig_err.add_trace(go.Heatmap(z=Z, x=uu, y=vv, zmin=DR1, zmax=DR2, colorscale='Viridis',
                                          colorbar=dict(title="Magnitude dB")))
-            fig_err.update_layout(title="Beam pattern (error fallback)", xaxis=dict(range=[-1,1]),
-                                  yaxis=dict(range=[-1,1], scaleanchor="x", scaleratio=1))
+            fig_err.update_layout(xaxis=dict(range=[-1,1]), yaxis=dict(range=[-1,1], scaleanchor="x", scaleratio=1))
             return fig_err, f"Error: {str(e)} — see server logs"
 
     @dash_app.callback(

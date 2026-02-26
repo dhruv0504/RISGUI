@@ -252,4 +252,5 @@ def compute_nearfield_pattern(params: dict):
 
     status = f"Generated {codebook_bits.shape[0]} mask(s). Scan grid: {len(x_pos)}×{len(y_pos)}. RIS fixed: {ANT_X}×{ANT_Y}."
     stored = codebook_bits.astype(int).tolist()
-    return {"figure": fig, "codebook": stored, "status": status}
+    # return 'z' key to satisfy callers/tests that expect a z-grid/result
+    return {"figure": fig, "codebook": stored, "status": status, "z": rr_disp}

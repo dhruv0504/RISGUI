@@ -2,6 +2,8 @@
 from dash import Dash, html, dcc, Input, Output, State, callback_context
 import plotly.graph_objects as go
 from app.services.farfield_range_beams_core import compute_farfield_pattern, build_codebook_text
+from app.dash_apps.callback_helpers import empty_figure
+from app.dash_apps.ui_helpers import dr_control, ris_size_control, randomization_control
 
 def create_farfield_range_beams_dash(server, url_base_pathname="/dash/far_field_range_of_beams/"):
     dash_app = Dash(__name__, server=server, url_base_pathname=url_base_pathname, suppress_callback_exceptions=True)
@@ -37,19 +39,13 @@ def create_farfield_range_beams_dash(server, url_base_pathname="/dash/far_field_
                                 html.Div([html.Label("φr stop"),  dcc.Input(id="prstop",  type="number", value=90.0, style={"width":"100%"})]),
                             ]),
                             html.Br(),
-                            html.Div([html.Label("Randomization"), dcc.Dropdown(id="rand", options=[{"label":"On","value":"On"},{"label":"Off","value":"Off"}], value="Off", clearable=False)]),
+                                randomization_control('rand', default='Off'),
                             html.Hr(),
                             html.H4("Dynamic Range (dB)"),
-                            html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"8px"}, children=[
-                                html.Div([html.Label("DR min"), dcc.Input(id="dr_min", type="number", value=-30, style={"width":"100%"})]),
-                                html.Div([html.Label("DR max"), dcc.Input(id="dr_max", type="number", value=0, style={"width":"100%"})]),
-                            ]),
+                            dr_control('dr_min', 'dr_max', dr_min_default=-30, dr_max_default=0),
                             html.Hr(),
                             html.H4("RIS Size"),
-                            html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"8px"}, children=[
-                                html.Div([html.Label("RS1"), dcc.Input(id="rs1", type="number", value=32, style={"width":"100%"})]),
-                                html.Div([html.Label("RS2"), dcc.Input(id="rs2", type="number", value=32, style={"width":"100%"})]),
-                            ]),
+                            ris_size_control('rs1', 'rs2', rs1_default=32, rs2_default=32),
                             html.Hr(),
                             html.Div(style={"display":"flex","gap":"10px"}, children=[
                                 html.Button("Update", id="btn_update", n_clicks=0, style={"padding":"8px 12px"}),
@@ -101,8 +97,7 @@ def create_farfield_range_beams_dash(server, url_base_pathname="/dash/far_field_
                     trstart, trstep, trstop,
                     rand_value, rs1, rs2, dr_min, dr_max):
         triggered = callback_context.triggered
-        empty_fig = go.Figure()
-        empty_fig.update_layout(title="Beam pattern", xaxis_title="u", yaxis_title="v", template="plotly_white")
+        empty_fig = empty_figure(title="Beam pattern", xaxis_title="u", yaxis_title="v")
         if not triggered:
             return empty_fig, None, "Cleared."
 
