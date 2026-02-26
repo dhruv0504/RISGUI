@@ -7,6 +7,7 @@ import traceback
 import numpy as np
 import plotly.graph_objects as go
 from PIL import Image
+import functools
 
 # Small helpers
 def wrap_to_pi(x):
@@ -119,12 +120,34 @@ def compute_fields(theta_inc_deg, phi_inc_deg,
         Uv = U.ravel()    # (Nobs,)
         Vv = V.ravel()
 
-        # Build phase matrix (Nelem x Nobs). If memory is tight, compute in chunks.
-        phase_mat = base[:, None] + (kX[:, None] * Uv[None, :]) + (kY[:, None] * Vv[None, :])
+        # Compute element contributions in chunks to limit peak memory usage.
+        # Use float32/complex64 to reduce memory and speed up operations.
+        dtype_f = np.float32
+        dtype_c = np.complex64
 
-        # Sum element contributions for each observation direction
-        E_vec = np.sum(np.exp(1j * phase_mat), axis=0)
-        E_rad = E_vec.reshape(U.shape)   # (len(phi), len(theta))
+        kX_f = kX.astype(dtype_f)
+        kY_f = kY.astype(dtype_f)
+        base_f = base.astype(dtype_f)
+        Uv_f = Uv.astype(dtype_f)
+        Vv_f = Vv.astype(dtype_f)
+
+        nelem = base_f.size
+        nobs = Uv_f.size
+
+        E_vec = np.zeros(nobs, dtype=dtype_c)
+
+        # Chunk size tuned to keep (nelem * chunk) modest; 8192 gives ~8k*1k ~ manageable
+        chunk = 8192
+        for start in range(0, nobs, chunk):
+            end = min(start + chunk, nobs)
+            Uc = Uv_f[start:end]
+            Vc = Vv_f[start:end]
+            # phase_chunk shape: (nelem, chunk)
+            phase_chunk = base_f[:, None] + (kX_f[:, None] * Uc[None, :]) + (kY_f[:, None] * Vc[None, :])
+            E_chunk = np.sum(np.exp(1j * phase_chunk).astype(dtype_c), axis=0)
+            E_vec[start:end] = E_chunk
+
+        E_rad = E_vec.reshape(U.shape)
 
         # dB scaling, normalization and clipping
         eps = 1e-12
@@ -316,6 +339,40 @@ def build_vector_figure_visible(data, texture_rgb=None):
         fallback = go.Figure()
         fallback.update_layout(scene=dict(aspectmode='cube'))
         return fallback
+
+
+# Public service wrapper expected by tests / Dash
+def compute_farfield_pattern(params: dict):
+    """
+    Lightweight wrapper that computes a far-field pattern and returns a
+    dictionary with keys `figure` (plotly Figure) and `pattern` (dB grid).
+    Accepts a params dict with optional keys:
+      - 'azi' : float (phi incidence in degrees)
+      - 'dr_min', 'dr_max' : clipping range in dB
+    """
+    try:
+        phi_inc = float(params.get("azi", 0.0))
+    except Exception:
+        phi_inc = 0.0
+
+    dr_min = float(params.get("dr_min", -60.0))
+    dr_max = float(params.get("dr_max", 0.0))
+
+    data = compute_fields(
+        theta_inc_deg=0.0,
+        phi_inc_deg=phi_inc,
+        theta_ref_deg=0.0,
+        phi_ref_deg=0.0,
+        RS1_arg=STATIC_RS1,
+        RS2_arg=STATIC_RS2,
+        DR1=dr_min,
+        DR2=dr_max,
+        randomize=False,
+    )
+
+    fig = build_vector_figure_visible(data)
+    pattern = data.get("r_clip") if isinstance(data, dict) else None
+    return {"figure": fig, "pattern": pattern}
 
 
 # def build_vector_figure_visible(data, texture_rgb=None):
