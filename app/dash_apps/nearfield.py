@@ -3,8 +3,34 @@ from dash import Dash, html, dcc, Input, Output, State
 import dash
 import plotly.graph_objects as go
 import traceback
-from app.dash_apps.callback_helpers import empty_figure
-from app.dash_apps.ui_helpers import dr_control, randomization_control
+
+
+def empty_figure(title="", xaxis_title=None, yaxis_title=None, template="plotly_white"):
+    fig = go.Figure()
+    fig.update_layout(title=title)
+    if xaxis_title or yaxis_title:
+        fig.update_layout(xaxis_title=xaxis_title or "", yaxis_title=yaxis_title or "")
+    fig.update_layout(template=template)
+    return fig
+
+
+def dr_control(dr_min_id: str, dr_max_id: str, dr_min_default: float = -30.0, dr_max_default: float = 0.0):
+    """Return a small Div containing dynamic range (dB) min/max inputs."""
+    return html.Div(
+        style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "8px"},
+        children=[
+            html.Div([html.Label("DR min"), dcc.Input(id=dr_min_id, type="number", value=dr_min_default, style={"width": "100%"})]),
+            html.Div([html.Label("DR max"), dcc.Input(id=dr_max_id, type="number", value=dr_max_default, style={"width": "100%"})]),
+        ],
+    )
+
+
+def randomization_control(rand_id: str, default: str = "On"):
+    """Return a small radio control for randomization On/Off."""
+    return html.Div([
+        html.Label("Randomization"),
+        dcc.RadioItems(id=rand_id, options=[{"label": "On", "value": "On"}, {"label": "Off", "value": "Off"}], value=default, inline=True),
+    ], style={"marginTop": "6px"})
 
 from app.services.nearfield_core import (
     compute_nearfield,

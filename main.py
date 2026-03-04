@@ -3,9 +3,6 @@ import os
 from flask import Flask, send_from_directory, jsonify
 
 
-# Application factory moved here from app/__init__.py
-# static_folder needs to point at the package's static directory.
-
 def create_app():
     static_dir = os.path.join(os.path.dirname(__file__), "app", "static")
     server = Flask(__name__, static_folder=static_dir, static_url_path="/static")
@@ -23,13 +20,14 @@ def create_app():
     from app.dash_apps.farfield_range_beams import create_farfield_range_beams_dash
     from app.dash_apps.nearfield_range_beams import create_nearfield_range_beams_dash
     from app.dash_apps.nearfield import create_nearfield_dash
-    from app.dash_apps.farfield_range_of_beams_sub6 import create_farfield_range_of_beams_sub6_dash
+    # from app.dash_apps.farfield_range_of_beams_sub6 import create_farfield_range_of_beams_sub6_dash
+
 
     create_farfield_dash(server, url_base_pathname="/dash/far_field/")
     create_farfield_range_beams_dash(server, url_base_pathname="/dash/far_field_range_of_beams/")
     create_nearfield_dash(server, url_base_pathname="/dash/near_field/")
     create_nearfield_range_beams_dash(server, url_base_pathname="/dash/near_field_range_of_beams/")
-    create_farfield_range_of_beams_sub6_dash(server, url_base_pathname="/dash/far_field_range_of_beams_sub6/")
+    # create_farfield_range_of_beams_sub6_dash(server, url_base_pathname="/dash/far_field_range_of_beams_sub6/")
 
     @server.route("/api/health")
     def health():
