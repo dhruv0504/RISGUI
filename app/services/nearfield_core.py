@@ -57,7 +57,7 @@ def compute_nearfield(xi, yi, zi, xr, yr, zr, zcut,
                       fc_mhz=27.2, ant_size_x=5.4, ant_size_y=5.4,
                       qe=1, qf=18,
                       x_range=1000, y_range=1000, x_step=50, y_step=50,
-                      verbose=False):
+                      verbose=False, phi_ele_rand_sample_arg=None):
 
     # Documentation string describing purpose and outputs
     """
@@ -204,8 +204,12 @@ def compute_nearfield(xi, yi, zi, xr, yr, zr, zcut,
             # Total number of RIS elements
             nels = ant_x * ant_y
 
+            # Use provided sample or global
+            sample = phi_ele_rand_sample_arg if phi_ele_rand_sample_arg is not None else phi_ele_rand_sample
+
             # Copy predefined random sample and flatten to 1D
-            v = phi_ele_rand_sample.copy().ravel()
+            print("sample type:", type(sample))
+            v = np.asarray(sample).copy().ravel()
 
             # If sample smaller than required, tile (repeat) values
             if v.size < nels:
@@ -499,7 +503,7 @@ def compute_nearfield(xi, yi, zi, xr, yr, zr, zcut,
         return {"error": str(e), "trace": tb}
 
 # Cache near-field compute to speed repeated identical queries from the UI
-compute_nearfield = lru_cache(maxsize=64)(compute_nearfield)
+# compute_nearfield = lru_cache(maxsize=64)(compute_nearfield)
         
 
 # ---------- plotting helpers ----------
